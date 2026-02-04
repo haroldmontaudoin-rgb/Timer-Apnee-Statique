@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Timer">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="format-detection" content="telephone=no">
+    <title>Timer Entrainement</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+        html, body {
+            height: 100%;
+            height: 100dvh;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            overscroll-behavior: none;
+        }
+        #root {
+            height: 100%;
+            height: 100dvh;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        input, button, select, textarea {
+            font-size: 16px !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Script pour générer les icônes et configurer la PWA -->
+    <script>
+        // Fonction pour générer une icône avec Canvas
+        function generateIcon(size) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // Fond avec dégradé
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#6366f1');  // Indigo
+            gradient.addColorStop(1, '#8b5cf6');  // Violet
+            
+            // Cercle de fond
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            // Cercle intérieur (cadran)
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size * 0.38, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.fill();
+            
+            // Bordure du cadran
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size * 0.38, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = size * 0.03;
+            ctx.stroke();
+            
+            // Aiguille des minutes (longue)
+            ctx.save();
+            ctx.translate(size/2, size/2);
+            ctx.rotate(-Math.PI / 6); // Position 10h
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -size * 0.28);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = size * 0.04;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            ctx.restore();
+            
+            // Aiguille des secondes (courte)
+            ctx.save();
+            ctx.translate(size/2, size/2);
+            ctx.rotate(Math.PI / 3); // Position 2h
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -size * 0.18);
+            ctx.strokeStyle = '#fbbf24'; // Jaune/or
+            ctx.lineWidth = size * 0.03;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            ctx.restore();
+            
+            // Point central
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size * 0.05, 0, Math.PI * 2);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+            
+            // Bouton du chrono (en haut)
+            ctx.beginPath();
+            ctx.roundRect(size/2 - size*0.06, size*0.08, size*0.12, size*0.1, size*0.02);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fill();
+            
+            return canvas.toDataURL('image/png');
+        }
+        
+        // Générer les icônes
+        const icon192 = generateIcon(192);
+        const icon512 = generateIcon(512);
+        
+        // Créer le manifest dynamiquement
+        const manifest = {
+            name: "Timer Entrainement",
+            short_name: "Timer",
+            start_url: ".",
+            display: "standalone",
+            background_color: "#111827",
+            theme_color: "#6366f1",
+            icons: [
+                {
+                    src: icon192,
+                    sizes: "192x192",
+                    type: "image/png"
+                },
+                {
+                    src: icon512,
+                    sizes: "512x512",
+                    type: "image/png"
+                }
+            ]
+        };
+        
+        // Ajouter le manifest au document
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = manifestUrl;
+        document.head.appendChild(manifestLink);
+        
+        // Ajouter l'icône Apple Touch
+        const appleTouchIcon = document.createElement('link');
+        appleTouchIcon.rel = 'apple-touch-icon';
+        appleTouchIcon.href = icon192;
+        document.head.appendChild(appleTouchIcon);
+        
+        // Ajouter favicon
+        const favicon = document.createElement('link');
+        favicon.rel = 'icon';
+        favicon.type = 'image/png';
+        favicon.href = icon192;
+        document.head.appendChild(favicon);
+        
+        // Service Worker inline
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'timer-v2';
+                const urlsToCache = ['/'];
+                
+                self.addEventListener('install', e => {
+                    e.waitUntil(
+                        caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+                    );
+                    self.skipWaiting();
+                });
+                
+                self.addEventListener('activate', e => {
+                    e.waitUntil(
+                        caches.keys().then(names => 
+                            Promise.all(names.filter(n => n !== CACHE_NAME).map(n => caches.delete(n)))
+                        )
+                    );
+                    clients.claim();
+                });
+                
+                self.addEventListener('fetch', e => {
+                    e.respondWith(
+                        caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('/')))
+                    );
+                });
+            `;
+            const blob = new Blob([swCode], { type: 'application/javascript' });
+            const swUrl = URL.createObjectURL(blob);
+            
+            navigator.serviceWorker.register(swUrl)
+                .then(reg => console.log('✅ PWA prête'))
+                .catch(err => console.log('ℹ️ Mode local'));
+        }
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function WorkoutTimer() {
+            const [exercises, setExercises] = useState([
+                { name: 'Echauffement', duration: 30, halfwayAnnounce: false },
+                { name: 'Exercice 1', duration: 45, halfwayAnnounce: true },
+                { name: 'Repos', duration: 15, halfwayAnnounce: false }
+            ]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [timeLeft, setTimeLeft] = useState(30);
+            const [isRunning, setIsRunning] = useState(false);
+            const [showSettings, setShowSettings] = useState(true);
+            const [voiceEnabled, setVoiceEnabled] = useState(true);
+            const [beepsEnabled, setBeepsEnabled] = useState(true);
+            const [countdownEnabled, setCountdownEnabled] = useState(true);
+            const [newExercise, setNewExercise] = useState({ name: '', minutes: '', seconds: '', halfwayAnnounce: false });
+            const [editingIndex, setEditingIndex] = useState(null);
+            const [editingName, setEditingName] = useState('');
+            const [editingMinutes, setEditingMinutes] = useState('');
+            const [editingSeconds, setEditingSeconds] = useState('');
+            const [editingHalfway, setEditingHalfway] = useState(false);
+            const [savedPrograms, setSavedPrograms] = useState([]);
+            const [programName, setProgramName] = useState('');
+            const [showSaveDialog, setShowSaveDialog] = useState(false);
+            const [showLoadDialog, setShowLoadDialog] = useState(false);
+            
+            const audioContext = useRef(null);
+            const hasBeepedAt10 = useRef(false);
+            const hasAnnouncedHalfway = useRef(false);
+
+            useEffect(() => {
+                if (!isRunning && currentIndex === 0 && showSettings) {
+                    setTimeLeft(exercises[0].duration);
+                }
+            }, [exercises, showSettings]);
+
+            useEffect(() => {
+                loadSavedPrograms();
+                audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
+                
+                if ('wakeLock' in navigator) {
+                    navigator.wakeLock.request('screen').catch(() => {});
+                }
+                
+                return () => {
+                    if (audioContext.current) audioContext.current.close();
+                };
+            }, []);
+
+            const loadSavedPrograms = () => {
+                try {
+                    const saved = localStorage.getItem('workoutPrograms');
+                    if (saved) {
+                        setSavedPrograms(JSON.parse(saved));
+                    }
+                } catch (error) {
+                    console.log('Aucun programme');
+                }
+            };
+
+            const saveProgram = () => {
+                if (!programName.trim()) {
+                    alert('Entrez un nom');
+                    return;
+                }
+                
+                const program = {
+                    name: programName,
+                    exercises: exercises,
+                    timestamp: Date.now()
+                };
+                
+                try {
+                    const programs = [...savedPrograms, program];
+                    localStorage.setItem('workoutPrograms', JSON.stringify(programs));
+                    setSavedPrograms(programs);
+                    setProgramName('');
+                    setShowSaveDialog(false);
+                    alert('✅ Programme sauvegardé !');
+                } catch (error) {
+                    alert('Erreur de sauvegarde');
+                }
+            };
+
+            const loadProgram = (program) => {
+                setExercises(program.exercises);
+                setCurrentIndex(0);
+                setTimeLeft(program.exercises[0].duration);
+                setIsRunning(false);
+                setShowLoadDialog(false);
+            };
+
+            const deleteProgram = (index) => {
+                if (confirm('Supprimer ce programme ?')) {
+                    try {
+                        const programs = savedPrograms.filter((_, i) => i !== index);
+                        localStorage.setItem('workoutPrograms', JSON.stringify(programs));
+                        setSavedPrograms(programs);
+                    } catch (error) {
+                        alert('Erreur');
+                    }
+                }
+            };
+
+            const playBeep = (freq, dur) => {
+                if (!audioContext.current || !beepsEnabled) return;
+                try {
+                    const osc = audioContext.current.createOscillator();
+                    const gain = audioContext.current.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.current.destination);
+                    osc.frequency.value = freq;
+                    osc.type = 'square';
+                    gain.gain.setValueAtTime(0.4, audioContext.current.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioContext.current.currentTime + dur);
+                    osc.start(audioContext.current.currentTime);
+                    osc.stop(audioContext.current.currentTime + dur);
+                } catch (e) {}
+            };
+
+            const speak = (text) => {
+                if (!voiceEnabled) return;
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'fr-FR';
+                    utterance.pitch = 0.8;
+                    utterance.rate = 1.1;
+                    window.speechSynthesis.speak(utterance);
+                }
+            };
+
+            useEffect(() => {
+                let interval;
+                if (isRunning && timeLeft > 0) {
+                    interval = setInterval(() => {
+                        setTimeLeft(prev => {
+                            const newTime = prev - 1;
+                            const exercise = exercises[currentIndex];
+                            const halfwayPoint = Math.ceil(exercise.duration / 2);
+                            
+                            if (exercise.halfwayAnnounce && !hasAnnouncedHalfway.current && newTime === halfwayPoint) {
+                                speak("Vous êtes à la moitié");
+                                hasAnnouncedHalfway.current = true;
+                            }
+                            
+                            if (newTime === 10 && !hasBeepedAt10.current) {
+                                for (let i = 0; i < 3; i++) {
+                                    setTimeout(() => playBeep(1400, 0.15), i * 200);
+                                }
+                                hasBeepedAt10.current = true;
+                            }
+                            
+                            if (newTime <= 5 && newTime > 0) {
+                                if (countdownEnabled) {
+                                    speak(newTime.toString());
+                                } else if (beepsEnabled) {
+                                    playBeep(1200, 0.1);
+                                }
+                            }
+                            
+                            if (newTime === 0) {
+                                if (beepsEnabled) {
+                                    playBeep(1500, 1.2);
+                                }
+                                
+                                setTimeout(() => {
+                                    if (currentIndex < exercises.length - 1) {
+                                        const nextIndex = currentIndex + 1;
+                                        setCurrentIndex(nextIndex);
+                                        setTimeLeft(exercises[nextIndex].duration);
+                                        hasBeepedAt10.current = false;
+                                        hasAnnouncedHalfway.current = false;
+                                        speak(exercises[nextIndex].name);
+                                    } else {
+                                        setIsRunning(false);
+                                        speak('Bravo ! Entrainement terminé !');
+                                    }
+                                }, 1000);
+                            }
+                            
+                            return newTime;
+                        });
+                    }, 1000);
+                }
+                return () => clearInterval(interval);
+            }, [isRunning, timeLeft, currentIndex, exercises, countdownEnabled, beepsEnabled]);
+
+            useEffect(() => {
+                if (isRunning && timeLeft === exercises[currentIndex].duration) {
+                    const duration = exercises[currentIndex].duration;
+                    const mins = Math.floor(duration / 60);
+                    const secs = duration % 60;
+                    
+                    let timeAnnouncement = '';
+                    if (mins > 0 && secs > 0) {
+                        timeAnnouncement = mins + ' minute' + (mins > 1 ? 's' : '') + ' ' + secs;
+                    } else if (mins > 0) {
+                        timeAnnouncement = mins + ' minute' + (mins > 1 ? 's' : '');
+                    } else {
+                        timeAnnouncement = secs + ' secondes';
+                    }
+                    
+                    speak(exercises[currentIndex].name + '. ' + timeAnnouncement);
+                }
+            }, [isRunning, currentIndex, exercises, timeLeft]);
+
+            const toggleTimer = () => {
+                if (audioContext.current?.state === 'suspended') {
+                    audioContext.current.resume();
+                }
+                if (!isRunning) {
+                    hasAnnouncedHalfway.current = false;
+                }
+                setIsRunning(!isRunning);
+                setShowSettings(false);
+            };
+
+            const resetTimer = () => {
+                setIsRunning(false);
+                setCurrentIndex(0);
+                setTimeLeft(exercises[0].duration);
+                hasBeepedAt10.current = false;
+                hasAnnouncedHalfway.current = false;
+                setShowSettings(true);
+            };
+
+            const addExercise = () => {
+                const mins = parseInt(newExercise.minutes) || 0;
+                const secs = parseInt(newExercise.seconds) || 0;
+                const totalSeconds = mins * 60 + secs;
+                
+                if (newExercise.name && totalSeconds > 0) {
+                    setExercises([...exercises, { 
+                        name: newExercise.name, 
+                        duration: totalSeconds,
+                        halfwayAnnounce: newExercise.halfwayAnnounce || false
+                    }]);
+                    setNewExercise({ name: '', minutes: '', seconds: '', halfwayAnnounce: false });
+                }
+            };
+
+            const deleteExercise = (index) => {
+                if (exercises.length > 1) {
+                    const newExercises = exercises.filter((_, i) => i !== index);
+                    setExercises(newExercises);
+                }
+            };
+
+            const duplicateExercise = (index) => {
+                const newExercises = [...exercises];
+                newExercises.splice(index + 1, 0, { ...exercises[index] });
+                setExercises(newExercises);
+            };
+
+            const moveExercise = (index, direction) => {
+                const newIndex = index + direction;
+                if (newIndex < 0 || newIndex >= exercises.length) return;
+                const newExercises = [...exercises];
+                [newExercises[index], newExercises[newIndex]] = [newExercises[newIndex], newExercises[index]];
+                setExercises(newExercises);
+            };
+
+            const startEditing = (index) => {
+                setEditingIndex(index);
+                setEditingName(exercises[index].name);
+                const totalSecs = exercises[index].duration;
+                setEditingMinutes(Math.floor(totalSecs / 60).toString());
+                setEditingSeconds((totalSecs % 60).toString());
+                setEditingHalfway(exercises[index].halfwayAnnounce || false);
+            };
+
+            const saveEdit = () => {
+                const mins = parseInt(editingMinutes) || 0;
+                const secs = parseInt(editingSeconds) || 0;
+                const totalSeconds = mins * 60 + secs;
+                
+                if (editingName.trim() && totalSeconds > 0) {
+                    const newExercises = [...exercises];
+                    newExercises[editingIndex] = { 
+                        name: editingName.trim(), 
+                        duration: totalSeconds,
+                        halfwayAnnounce: editingHalfway
+                    };
+                    setExercises(newExercises);
+                    setEditingIndex(null);
+                }
+            };
+
+            const cancelEdit = () => {
+                setEditingIndex(null);
+                setEditingHalfway(false);
+            };
+
+            const formatTime = (seconds) => {
+                const m = Math.floor(seconds / 60);
+                const s = seconds % 60;
+                return m + ':' + s.toString().padStart(2, '0');
+            };
+
+            const totalTime = exercises.reduce((sum, ex) => sum + ex.duration, 0);
+            const elapsedTime = exercises.slice(0, currentIndex).reduce((sum, ex) => sum + ex.duration, 0) + 
+                              (exercises[currentIndex].duration - timeLeft);
+            const progress = (elapsedTime / totalTime) * 100;
+
+            const nextExercise = currentIndex < exercises.length - 1 
+                ? exercises[currentIndex + 1] 
+                : null;
+
+            if (showSettings) {
+                return (
+                    <div style={{minHeight: '100vh', minHeight: '100dvh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)'}} className="bg-gradient-to-br from-indigo-500 to-purple-600 p-4 flex items-center justify-center overflow-y-auto">
+                        <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 my-4" style={{maxHeight: 'calc(100vh - 2rem)', maxHeight: 'calc(100dvh - 2rem)', overflowY: 'auto'}}>
+                            <h1 className="text-2xl font-bold text-center text-gray-800 mb-4 sticky top-0 bg-white pb-2">⏱️ Timer Entrainement</h1>
+                            
+                            <div className="flex gap-2 mb-6">
+                                <button onClick={() => setShowSaveDialog(true)} className="flex-1 bg-indigo-500 text-white py-3 rounded-lg text-base active:scale-95 transition-transform font-medium">
+                                    💾 Sauvegarder
+                                </button>
+                                <button onClick={() => setShowLoadDialog(true)} className="flex-1 bg-purple-500 text-white py-3 rounded-lg text-base active:scale-95 transition-transform font-medium">
+                                    📂 Charger
+                                </button>
+                            </div>
+                            
+                            <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+                                <h3 className="font-bold mb-3 text-base">🔊 Paramètres Audio</h3>
+                                <label className="flex items-center justify-between mb-3 cursor-pointer py-2">
+                                    <span className="text-base">🗣️ Voix</span>
+                                    <input type="checkbox" checked={voiceEnabled} onChange={(e) => setVoiceEnabled(e.target.checked)} className="w-6 h-6 accent-indigo-500" />
+                                </label>
+                                <label className="flex items-center justify-between mb-3 cursor-pointer py-2">
+                                    <span className="text-base">🔔 Bips</span>
+                                    <input type="checkbox" checked={beepsEnabled} onChange={(e) => setBeepsEnabled(e.target.checked)} className="w-6 h-6 accent-indigo-500" />
+                                </label>
+                                <label className="flex items-center justify-between cursor-pointer py-2">
+                                    <span className="text-base">🔢 Compte vocal 5-4-3-2-1</span>
+                                    <input type="checkbox" checked={countdownEnabled} onChange={(e) => setCountdownEnabled(e.target.checked)} className="w-6 h-6 accent-indigo-500" />
+                                </label>
+                            </div>
+
+                            <div className="mb-6">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h3 className="font-bold">📋 Exercices ({exercises.length})</h3>
+                                    <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">Total: {formatTime(totalTime)}</span>
+                                </div>
+                                <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
+                                    {exercises.map((ex, index) => (
+                                        <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border-l-4 border-indigo-400">
+                                            {editingIndex === index ? (
+                                                <div className="flex-1 flex gap-2 items-center flex-wrap">
+                                                    <input type="text" value={editingName} onChange={(e) => setEditingName(e.target.value)} className="flex-1 p-2 border rounded text-sm min-w-0" autoFocus />
+                                                    <input type="number" value={editingMinutes} onChange={(e) => setEditingMinutes(e.target.value)} className="w-14 p-2 border rounded text-sm text-center" min="0" placeholder="min" />
+                                                    <span className="font-bold">:</span>
+                                                    <input type="number" value={editingSeconds} onChange={(e) => setEditingSeconds(e.target.value)} className="w-14 p-2 border rounded text-sm text-center" min="0" max="59" placeholder="sec" />
+                                                    <label className="flex items-center gap-1 text-xs bg-yellow-100 px-2 py-1 rounded">
+                                                        <input type="checkbox" checked={editingHalfway} onChange={(e) => setEditingHalfway(e.target.checked)} className="w-4 h-4" />
+                                                        <span>½</span>
+                                                    </label>
+                                                    <button onClick={saveEdit} className="bg-green-500 text-white px-3 py-1 rounded font-bold">✓</button>
+                                                    <button onClick={cancelEdit} className="bg-red-500 text-white px-3 py-1 rounded font-bold">✕</button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center gap-1">
+                                                        <button onClick={() => moveExercise(index, -1)} className="text-gray-400 hover:text-gray-600 p-1" disabled={index === 0}>▲</button>
+                                                        <button onClick={() => moveExercise(index, 1)} className="text-gray-400 hover:text-gray-600 p-1" disabled={index === exercises.length - 1}>▼</button>
+                                                    </div>
+                                                    <button onClick={() => startEditing(index)} className="flex-1 text-left hover:text-indigo-600 ml-2">
+                                                        <span className="font-medium">{ex.name}</span>
+                                                        <span className="text-gray-500 ml-2 text-sm">({formatTime(ex.duration)})</span>
+                                                        {ex.halfwayAnnounce && <span className="ml-1 text-xs bg-yellow-200 px-1 rounded">½</span>}
+                                                    </button>
+                                                    <div className="flex gap-1">
+                                                        <button onClick={() => duplicateExercise(index)} className="text-indigo-500 p-2 hover:bg-indigo-100 rounded">📋</button>
+                                                        <button onClick={() => deleteExercise(index)} className="text-red-500 p-2 hover:bg-red-100 rounded">🗑️</button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="space-y-2 bg-indigo-50 p-3 rounded-xl">
+                                    <input type="text" placeholder="Nom de l'exercice" value={newExercise.name} onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })} className="w-full p-3 border-2 border-indigo-200 rounded-lg text-base focus:border-indigo-500 outline-none" />
+                                    <div className="flex gap-2">
+                                        <input type="number" placeholder="Min" value={newExercise.minutes} onChange={(e) => setNewExercise({ ...newExercise, minutes: e.target.value })} className="flex-1 p-3 border-2 border-indigo-200 rounded-lg text-center text-base focus:border-indigo-500 outline-none" min="0" />
+                                        <span className="self-center font-bold text-xl text-indigo-400">:</span>
+                                        <input type="number" placeholder="Sec" value={newExercise.seconds} onChange={(e) => setNewExercise({ ...newExercise, seconds: e.target.value })} className="flex-1 p-3 border-2 border-indigo-200 rounded-lg text-center text-base focus:border-indigo-500 outline-none" min="0" max="59" />
+                                    </div>
+                                    <div className="flex gap-2 items-center">
+                                        <label className="flex items-center gap-2 flex-1 p-3 bg-white rounded-lg cursor-pointer border-2 border-indigo-200">
+                                            <input type="checkbox" checked={newExercise.halfwayAnnounce} onChange={(e) => setNewExercise({ ...newExercise, halfwayAnnounce: e.target.checked })} className="w-5 h-5 accent-indigo-500" />
+                                            <span className="text-base">🔔 Annoncer "moitié"</span>
+                                        </label>
+                                        <button onClick={addExercise} className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg text-xl active:scale-95 transition-all font-bold shadow-lg">+</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button onClick={toggleTimer} className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-5 rounded-xl font-bold text-xl mt-4 active:scale-95 transition-all shadow-lg">
+                                ▶️ Démarrer l'entrainement
+                            </button>
+
+                            {showSaveDialog && (
+                                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setShowSaveDialog(false)}>
+                                    <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+                                        <h3 className="text-xl font-bold mb-4">💾 Sauvegarder le programme</h3>
+                                        <input type="text" placeholder="Nom du programme" value={programName} onChange={(e) => setProgramName(e.target.value)} className="w-full p-3 border-2 border-indigo-200 rounded-lg mb-4 focus:border-indigo-500 outline-none" autoFocus />
+                                        <div className="flex gap-2">
+                                            <button onClick={() => setShowSaveDialog(false)} className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg font-medium">Annuler</button>
+                                            <button onClick={saveProgram} className="flex-1 bg-indigo-500 text-white py-3 rounded-lg font-medium">Sauvegarder</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {showLoadDialog && (
+                                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={() => setShowLoadDialog(false)}>
+                                    <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-96 overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+                                        <h3 className="text-xl font-bold mb-4">📂 Charger un programme</h3>
+                                        {savedPrograms.length === 0 ? (
+                                            <div className="text-center py-8">
+                                                <div className="text-4xl mb-2">📭</div>
+                                                <p className="text-gray-500">Aucun programme sauvegardé</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2 mb-4">
+                                                {savedPrograms.map((program, index) => (
+                                                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-indigo-50 transition-colors">
+                                                        <button onClick={() => loadProgram(program)} className="flex-1 text-left">
+                                                            <div className="font-medium text-indigo-700">{program.name}</div>
+                                                            <div className="text-sm text-gray-500">{program.exercises.length} exercices • {formatTime(program.exercises.reduce((s,e) => s + e.duration, 0))}</div>
+                                                        </button>
+                                                        <button onClick={() => deleteProgram(index)} className="text-red-500 p-2 hover:bg-red-100 rounded">🗑️</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <button onClick={() => setShowLoadDialog(false)} className="w-full bg-gray-200 text-gray-800 py-3 rounded-lg font-medium">Fermer</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div style={{minHeight: '100vh', minHeight: '100dvh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)'}} className="bg-gradient-to-br from-gray-900 to-gray-800 p-2 flex items-center justify-center">
+                    <div className="w-full max-w-6xl">
+                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 rounded-2xl mb-2 shadow-lg">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-xl font-bold">⏱️ Entrainement</h2>
+                                    <p className="text-sm opacity-80">Exercice {currentIndex + 1} / {exercises.length}</p>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-3xl font-bold font-mono">{formatTime(Math.max(0, Math.floor(totalTime - elapsedTime)))}</div>
+                                    <p className="text-sm opacity-80">Temps restant</p>
+                                </div>
+                            </div>
+                            <div className="mt-3 h-3 bg-white/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-white transition-all duration-300 rounded-full" style={{ width: Math.min(100, progress) + '%' }} />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div className={'rounded-2xl p-6 flex flex-col items-center justify-center min-h-[300px] md:min-h-96 shadow-lg ' + (currentIndex % 2 === 0 ? 'bg-gradient-to-br from-blue-500 to-blue-700' : 'bg-gradient-to-br from-rose-500 to-rose-700')}>
+                                <div className="text-white/80 text-sm font-semibold mb-2 uppercase tracking-wider">🏃 En cours</div>
+                                <h2 className="text-2xl md:text-4xl font-bold text-white mb-4 text-center">{exercises[currentIndex].name}</h2>
+                                <div className={'text-7xl md:text-9xl font-bold text-white mb-6 font-mono ' + (timeLeft <= 5 ? 'animate-pulse' : '')}>{formatTime(timeLeft)}</div>
+                                <div className="flex gap-4">
+                                    <button onClick={toggleTimer} className="bg-white/20 hover:bg-white/30 active:bg-white/40 text-white rounded-full p-6 text-4xl min-w-[80px] min-h-[80px] flex items-center justify-center transition-all shadow-lg backdrop-blur">
+                                        {isRunning ? '⏸️' : '▶️'}
+                                    </button>
+                                    <button onClick={resetTimer} className="bg-white/20 hover:bg-white/30 active:bg-white/40 text-white rounded-full p-6 text-4xl min-w-[80px] min-h-[80px] flex items-center justify-center transition-all shadow-lg backdrop-blur">
+                                        🔄
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className={'rounded-2xl p-6 flex flex-col items-center justify-center min-h-[300px] md:min-h-96 shadow-lg ' + (nextExercise ? (currentIndex % 2 === 0 ? 'bg-gradient-to-br from-rose-500 to-rose-700' : 'bg-gradient-to-br from-blue-500 to-blue-700') : 'bg-gradient-to-br from-emerald-500 to-emerald-700')}>
+                                <div className="text-white/80 text-sm font-semibold mb-2 flex items-center gap-2 uppercase tracking-wider">
+                                    ➡️ Suivant
+                                </div>
+                                {nextExercise ? (
+                                    <>
+                                        <h2 className="text-2xl md:text-4xl font-bold text-white mb-4 text-center">{nextExercise.name}</h2>
+                                        <div className="text-5xl md:text-7xl font-bold text-white/80 font-mono">{formatTime(nextExercise.duration)}</div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="text-7xl mb-4">🏆</div>
+                                        <div className="text-xl md:text-3xl font-bold text-white text-center">Dernier exercice !</div>
+                                        <p className="text-white/70 mt-2">Vous y êtes presque !</p>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<WorkoutTimer />, document.getElementById('root'));
+    </script>
+</body>
+</html>
